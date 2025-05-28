@@ -726,14 +726,14 @@ def submit_survey():
     if curiosity is None:
         st.error("Please rate your curiosity level before proceeding.")
         return
+    if accept_feedback is None:
+        st.error("Please indicate whether you accept the feedback before proceeding.")
+        return
     
     # Only validate relatedness and accept_feedback for conditions other than "no_feedback"
     if feedback_type != "no_feedback":
         if relatedness is None:
             st.error("Please rate the relatedness before proceeding.")
-            return
-        if accept_feedback is None:
-            st.error("Please indicate whether you accept the feedback before proceeding.")
             return
     
     # Store in current iteration data
@@ -1229,7 +1229,7 @@ def main():
             if accept_feedback_option is not None:
                 st.session_state.accept_feedback = accept_feedback_option
             
-            # Only show relatedness and accept_feedback questions if feedback_type is NOT "no_feedback"
+            # Only show relatedness questions if feedback_type is NOT "no_feedback"
             if feedback_type != "no_feedback":
                 relatedness_rating = st.radio(
                     "AI의 피드백이 얼마나 자신의 질문과 관련되었나요?",
