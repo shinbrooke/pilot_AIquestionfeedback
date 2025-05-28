@@ -1218,6 +1218,17 @@ def main():
             if curiosity_rating is not None:
                 st.session_state.curiosity = curiosity_rating
             
+            accept_feedback_option = st.radio(
+                "피드백을 수용할 의향이 있으신가요?",
+                options=["예", "아니오"],
+                index=None,
+                key=f"accept_feedback_{st.session_state.iteration}",
+            )
+            
+            # Store selection immediately
+            if accept_feedback_option is not None:
+                st.session_state.accept_feedback = accept_feedback_option
+            
             # Only show relatedness and accept_feedback questions if feedback_type is NOT "no_feedback"
             if feedback_type != "no_feedback":
                 relatedness_rating = st.radio(
@@ -1233,20 +1244,9 @@ def main():
                 if relatedness_rating is not None:
                     st.session_state.relatedness = relatedness_rating
                 
-                accept_feedback_option = st.radio(
-                    "피드백을 수용할 의향이 있으신가요?",
-                    options=["예", "아니오"],
-                    index=None,
-                    key=f"accept_feedback_{st.session_state.iteration}",
-                )
-                
-                # Store selection immediately
-                if accept_feedback_option is not None:
-                    st.session_state.accept_feedback = accept_feedback_option
             else:
                 # For no_feedback condition, set these to None or default values
                 st.session_state.relatedness = None
-                st.session_state.accept_feedback = None
             
             # Comments section
             survey_comments = st.text_area(
