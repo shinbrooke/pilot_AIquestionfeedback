@@ -1180,7 +1180,7 @@ def main():
             st.subheader("AI 피드백:")
             st.markdown("""아래는 AI가 연구 참여자의 질문에 대해 제시한 피드백입니다.""")
             current_feedback = st.session_state.current_iteration_data.get('feedback', '')
-            st.markdown('''**{current_feedback}**''')
+            st.markdown(f'**{current_feedback}**')
             
             # Comments section
             feedback_comments = st.text_area(
