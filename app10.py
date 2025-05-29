@@ -1178,7 +1178,7 @@ def main():
             
             # Show AI feedback
             st.subheader("AI 피드백:")
-            st.write("아래는 AI가 연구 참여자의 질문에 대해 제시한 피드백입니다.")
+            st.markdown("""아래는 AI가 연구 참여자의 질문에 대해 제시한 피드백입니다.""")
             current_feedback = st.session_state.current_iteration_data.get('feedback', '')
             st.markdown(current_feedback)
             
@@ -1193,7 +1193,7 @@ def main():
             st.session_state.feedback_comments = feedback_comments
 
             # next step explanation
-            st.write("다음으로 넘어가면 AI 피드백에 대한 설문이 제시됩니다. AI 피드백을 완전히 숙지하고 넘어가주세요.")
+            st.markdown("""다음으로 넘어가면 AI 피드백에 대한 설문이 제시됩니다. AI 피드백을 완전히 숙지하고 넘어가주세요.""")
             
             if st.button("다음", key="feedback_next_button"):
                 send_marker("survey_start")
