@@ -340,11 +340,11 @@ def create_related_question_generation_chain(llm):
             template="Paragraph: {paragraph}\nUser Question: {user_question}\nSuggested Question: {suggested_question}"
         ),
         prefix="""다음은 사용자의 질문 요소를 활용해 '창조' 수준의 질문을 제안하는 예시들입니다:""",
-        suffix="""이제 다음 조건을 *모두* 따라 새로운 질문을 제안해주세요:
+        suffix="""이제 다음 조건을 반드시 *모두* 따라 새로운 질문을 제안해주세요:
 
 조건:
 1. 대학교 학부생인 학습자가 paragraph를 읽고 수업에서 제기할 법한 질문
-2. Bloom's taxonomy에서 '창조' 수준의 질문 (새롭고 창의적인 연구 문제를 제안하는 느낌)
+2. Bloom's taxonomy에서 '창조' 수준의 질문 (새롭고 창의적인 연구 문제를 제안)
 3. 학습자의 질문에서 핵심 내용 요소 1개를 그대로 사용하되, paragraph 내 새로운 요소를 추가
 4. Open-ended question, 즉 여러 답이 가능한 질문이어야 함
 5. 대학교 학부생 수준에서 이해 가능해야 함
@@ -383,11 +383,11 @@ def create_unrelated_question_generation_chain(llm):
             template="Paragraph: {paragraph}\nUser Question: {user_question}\nSuggested Question: {suggested_question}"
         ),
         prefix="""다음은 사용자의 질문과 무관하게 paragraph만을 기반으로 '창조' 수준의 질문을 제안하는 예시들입니다:""",
-        suffix="""이제 다음 조건을 *모두* 따라 새로운 질문을 제안해주세요:
+        suffix="""이제 다음 조건을 반드시 *모두* 따라 새로운 질문을 제안해주세요:
 
 조건:
 1. 대학교 학부생인 학습자가 paragraph를 읽고 수업에서 제기할 법한 질문
-2. Bloom's taxonomy에서 '창조' 수준의 질문 (새롭고 창의적인 연구 문제를 제안하는 느낌)
+2. Bloom's taxonomy에서 '창조' 수준의 질문 (새롭고 창의적인 연구 문제를 제안)
 3. 학습자의 질문의 내용 요소를 직간접적으로 전혀 사용하지 않고, paragraph 내 새로운 요소만으로 구성
 4. Open-ended question, 즉 여러 답이 가능한 질문이어야 함
 5. 대학교 학부생 수준에서 이해 가능해야 함
