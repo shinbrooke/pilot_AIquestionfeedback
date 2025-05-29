@@ -14,6 +14,16 @@ from dotenv import load_dotenv
 from langchain.chains import LLMChain, SequentialChain
 from langchain.prompts import PromptTemplate, FewShotPromptTemplate
 from langchain.prompts.example_selector import LengthBasedExampleSelector
+from langchain.output_parsers import PydanticOutputParser
+from langchain.schema import OutputParserException
+from pydantic import BaseModel, Field
+
+# Pydantic models for structured output
+class BloomClassification(BaseModel):
+    bloom_level: str = Field(description="The Bloom's taxonomy level: 기억, 이해, 적용, 분석, 평가, or 창조")
+
+class QuestionSuggestion(BaseModel):
+    suggested_question: str = Field(description="A single suggested question in Korean ending with a question mark")
 
 # Import paragraphs from config file
 try:
@@ -281,7 +291,10 @@ def create_condition_assignment(total_paragraphs=45, condition_randomization_see
     return condition_mapping
 
 def create_bloom_classification_chain(llm):
-    """Create a chain for classifying questions according to Bloom's taxonomy with few-shot examples."""
+    """Create a chain for classifying questions according to Bloom's taxonomy with structured output."""
+    
+    # Create output parser
+    parser = PydanticOutputParser(pydantic_object=BloomClassification)
     
     # Create example selector for few-shot prompting
     example_selector = LengthBasedExampleSelector(
@@ -311,18 +324,30 @@ Bloom's Taxonomy 6단계:
 6. 창조: 창의적인 연구 가설 또는 연구를 할 수 있는 새로운 방향을 제안하는 질문
 
 예시들:""",
-        suffix="이제 다음 질문을 분류해주세요. 정확히 다음 6개 중 하나로만 답하세요: 기억, 이해, 적용, 분석, 평가, 창조\n\nParagraph: {paragraph}\nQuestion: {question}\nBloom Level:",
-        input_variables=["paragraph", "question"]
+        suffix="""이제 다음 질문을 분류해주세요.
+
+Paragraph: {paragraph}
+Question: {question}
+
+{format_instructions}
+
+분류 결과:""",
+        input_variables=["paragraph", "question"],
+        partial_variables={"format_instructions": parser.get_format_instructions()}
     )
     
     return LLMChain(
         llm=llm,
         prompt=few_shot_prompt,
-        output_key="bloom_level"
+        output_key="bloom_classification",
+        output_parser=parser
     )
 
 def create_related_question_generation_chain(llm):
-    """Create a chain for generating related questions using few-shot examples."""
+    """Create a chain for generating related questions using structured output."""
+    
+    # Create output parser
+    parser = PydanticOutputParser(pydantic_object=QuestionSuggestion)
     
     example_selector = LengthBasedExampleSelector(
         examples=RELATED_QUESTION_EXAMPLES,
@@ -354,18 +379,25 @@ def create_related_question_generation_chain(llm):
 Paragraph: {paragraph}
 User Question: {question}
 
-아래에 새로운 질문만 작성해주세요:""",
-        input_variables=["paragraph", "question"]
+{format_instructions}
+
+새로운 질문:""",
+        input_variables=["paragraph", "question"],
+        partial_variables={"format_instructions": parser.get_format_instructions()}
     )
     
     return LLMChain(
         llm=llm,
         prompt=few_shot_prompt,
-        output_key="suggested_question"
+        output_key="question_suggestion",
+        output_parser=parser
     )
 
 def create_unrelated_question_generation_chain(llm):
-    """Create a chain for generating unrelated questions using few-shot examples."""
+    """Create a chain for generating unrelated questions using structured output."""
+    
+    # Create output parser
+    parser = PydanticOutputParser(pydantic_object=QuestionSuggestion)
     
     example_selector = LengthBasedExampleSelector(
         examples=UNRELATED_QUESTION_EXAMPLES,
@@ -397,20 +429,24 @@ def create_unrelated_question_generation_chain(llm):
 Paragraph: {paragraph}
 User Question: {question}
 
-아래에 새로운 질문만 작성해주세요:""",
-        input_variables=["paragraph", "question"]
+{format_instructions}
+
+새로운 질문:""",
+        input_variables=["paragraph", "question"],
+        partial_variables={"format_instructions": parser.get_format_instructions()}
     )
     
     return LLMChain(
         llm=llm,
         prompt=few_shot_prompt,
-        output_key="suggested_question"
+        output_key="question_suggestion",
+        output_parser=parser
     )
 
 # Function to get AI feedback using LangChain
 def get_ai_feedback(question, paragraph, original_paragraph_index):
     """
-    Generate AI feedback using multi-chain architecture with custom temperatures and few-shot prompting.
+    Generate AI feedback using multi-chain architecture with structured output parsing.
     
     Args:
         question: The participant's question
@@ -430,21 +466,61 @@ def get_ai_feedback(question, paragraph, original_paragraph_index):
         if not api_key:
             return "Error: OpenAI API key not found. Please set OPENAI_API_KEY in your environment variables or .env file."
         
-        # Create LLM instances with different temperatures
-        classification_llm = OpenAI(temperature=0.1, openai_api_key=api_key)  # Low temperature for consistent classification
-        generation_llm = OpenAI(temperature=0.4, openai_api_key=api_key)     # Medium temperature for creative question generation
+        # Create LLM instances with GPT-4 model specification and different temperatures
+        classification_llm = OpenAI(
+            model_name="gpt-4-0613",  # Specify GPT-4 model
+            temperature=0.1, 
+            openai_api_key=api_key,
+            max_retries=2
+        )
+        generation_llm = OpenAI(
+            model_name="gpt-4-0613",  # Specify GPT-4 model
+            temperature=0.7, 
+            openai_api_key=api_key,
+            max_retries=2
+        )
         
-        # Chain 1: Bloom's Taxonomy Classification (Temperature 0.1)
+        # Chain 1: Bloom's Taxonomy Classification with structured output
         classification_chain = create_bloom_classification_chain(classification_llm)
         
-        # Execute classification
-        classification_result = classification_chain.run({
-            "paragraph": paragraph,
-            "question": question
-        })
+        # Execute classification with error handling
+        max_classification_retries = 3
+        bloom_level = None
         
-        # Clean up the classification result
-        bloom_level = classification_result.strip()
+        for attempt in range(max_classification_retries):
+            try:
+                classification_result = classification_chain.run({
+                    "paragraph": paragraph,
+                    "question": question
+                })
+                
+                # Extract bloom_level from the structured output
+                if hasattr(classification_result, 'bloom_level'):
+                    bloom_level = classification_result.bloom_level
+                elif isinstance(classification_result, dict) and 'bloom_level' in classification_result:
+                    bloom_level = classification_result['bloom_level']
+                else:
+                    # Fallback parsing
+                    bloom_level = str(classification_result).strip()
+                
+                # Validate the bloom level
+                valid_levels = ["기억", "이해", "적용", "분석", "평가", "창조"]
+                if bloom_level not in valid_levels:
+                    # Try to extract valid level from the response
+                    for level in valid_levels:
+                        if level in str(classification_result):
+                            bloom_level = level
+                            break
+                    else:
+                        bloom_level = "이해"  # Default fallback
+                
+                break  # Success, exit retry loop
+                
+            except (OutputParserException, ValueError, AttributeError) as e:
+                print(f"Classification attempt {attempt + 1} failed: {e}")
+                if attempt == max_classification_retries - 1:
+                    bloom_level = "이해"  # Final fallback
+                continue
         
         # Generate feedback based on feedback type
         if feedback_type == "no_feedback":
@@ -457,18 +533,47 @@ def get_ai_feedback(question, paragraph, original_paragraph_index):
             else:  # unrelated
                 question_generation_chain = create_unrelated_question_generation_chain(generation_llm)
             
-            suggestion_result = question_generation_chain.run({
-                "paragraph": paragraph,
-                "question": question
-            })
+            # Execute question generation with error handling
+            max_generation_retries = 3
+            suggested_question = None
             
-            suggested_question = suggestion_result.strip()
+            for attempt in range(max_generation_retries):
+                try:
+                    suggestion_result = question_generation_chain.run({
+                        "paragraph": paragraph,
+                        "question": question
+                    })
+                    
+                    # Extract suggested_question from the structured output
+                    if hasattr(suggestion_result, 'suggested_question'):
+                        suggested_question = suggestion_result.suggested_question
+                    elif isinstance(suggestion_result, dict) and 'suggested_question' in suggestion_result:
+                        suggested_question = suggestion_result['suggested_question']
+                    else:
+                        suggested_question = str(suggestion_result).strip()
+                    
+                    # Validate the suggested question
+                    if suggested_question and suggested_question.endswith('?'):
+                        break  # Success, exit retry loop
+                    else:
+                        # Add question mark if missing
+                        if suggested_question and not suggested_question.endswith('?'):
+                            suggested_question += '?'
+                        break
+                        
+                except (OutputParserException, ValueError, AttributeError) as e:
+                    print(f"Question generation attempt {attempt + 1} failed: {e}")
+                    if attempt == max_generation_retries - 1:
+                        suggested_question = "이 내용을 바탕으로 새로운 연구 방향을 제안해볼 수 있을까?"  # Final fallback
+                    continue
+            
             final_response = f"'{bloom_level}' 수준의 질문을 작성하셨군요.\n'{suggested_question}'와 같은 질문으로 수정하는 것은 어떨까요?"
         
         # Log the chain execution details
         log_event("AI feedback chain execution", {
             "classification_temperature": 0.1,
-            "generation_temperature": 0.5 if feedback_type != "no_feedback" else None,
+            "generation_temperature": 0.4 if feedback_type != "no_feedback" else None,
+            "model_name": "gpt-4-0613",
             "bloom_level_classified": bloom_level,
             "suggested_question": final_response.split('\n')[1] if feedback_type != "no_feedback" else None,
             "feedback_type": feedback_type,
@@ -481,7 +586,7 @@ def get_ai_feedback(question, paragraph, original_paragraph_index):
         error_msg = str(e)
         if "insufficient_quota" in error_msg or "quota" in error_msg.lower():
             if feedback_type == "no_feedback":
-                return f"OpenAI API quota exceeded. Please add a payment method to your OpenAI account. For now, using mock response: '기억' 수준의 질문을 작성하셨군요.\n다시 질문을 작성할 수 있는 기회가 다음에 제시됩니다.\n\n[실험 조건: 피드백 없음]"
+                return f"OpenAI API quota exceeded. Please add a payment method to your OpenAI account. For now, using mock response: '기억' 수준의 질문을 작성하셨군요.\n다음 단계로 넘어가면 질문을 수정할 기회가 주어집니다. 더 창의적인 질문으로 수정하는 것은 어떨까요?\n\n[실험 조건: 피드백 없음]"
             else:
                 fallback_type = "관련된" if feedback_type == "related" else "텍스트 기반의"
                 return f"OpenAI API quota exceeded. Please add a payment method to your OpenAI account. For now, using mock response: '기억' 수준의 질문을 작성하셨군요.\n'이 내용을 바탕으로 새로운 아이디어나 해결책을 제안해보세요?'와 같은 질문으로 수정하는 것은 어떨까요?\n\n[실험 조건: {fallback_type} 피드백]"
