@@ -345,7 +345,7 @@ def create_related_question_generation_chain(llm):
 조건:
 1. 대학교 학부생인 학습자가 paragraph를 읽고 수업에서 제기할 법한 질문
 2. Bloom's taxonomy에서 '창조' 수준의 질문 (새롭고 창의적인 연구 문제를 제안)
-3. 학습자가 기존에 제시한 질문(question)에서 핵심 내용 일부를 그대로 포함하고, paragraph 내 새로운 내용을 추가하여 질문 구성
+3. 학습자가 기존에 제시한 질문(question)에서 핵심 내용을 그대로 포함하고, paragraph 내 새로운 내용을 결합하여 질문 구성
 4. Open-ended question, 즉 여러 답이 가능한 질문이어야 함
 5. 대학교 학부생 수준에서 이해 가능해야 함
 6. 질문은 한국어로 한 문장이어야 함
