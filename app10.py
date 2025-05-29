@@ -345,7 +345,7 @@ def create_related_question_generation_chain(llm):
 조건:
 1. 대학교 학부생인 학습자가 paragraph를 읽고 수업에서 제기할 법한 질문
 2. Bloom's taxonomy에서 '창조' 수준의 질문 (새롭고 창의적인 연구 문제를 제안)
-3. 학습자의 질문에서 핵심 내용 요소 1개를 그대로 사용하되, paragraph 내 새로운 요소를 추가
+3. 학습자가 기존에 제시한 질문(question)에서 핵심 내용 일부를 그대로 포함하고, paragraph 내 새로운 내용을 추가하여 질문 구성
 4. Open-ended question, 즉 여러 답이 가능한 질문이어야 함
 5. 대학교 학부생 수준에서 이해 가능해야 함
 6. 질문은 한국어로 한 문장이어야 함
@@ -388,7 +388,7 @@ def create_unrelated_question_generation_chain(llm):
 조건:
 1. 대학교 학부생인 학습자가 paragraph를 읽고 수업에서 제기할 법한 질문
 2. Bloom's taxonomy에서 '창조' 수준의 질문 (새롭고 창의적인 연구 문제를 제안)
-3. 학습자의 질문의 내용 요소를 직간접적으로 전혀 사용하지 않고, paragraph 내 새로운 요소만으로 구성
+3. 학습자가 기존에 제시한 질문(question)의 내용을 직간접적으로 전혀 사용하지 않고, paragraph 내 새로운 내용만으로 구성
 4. Open-ended question, 즉 여러 답이 가능한 질문이어야 함
 5. 대학교 학부생 수준에서 이해 가능해야 함
 6. 질문은 한국어로 한 문장이어야 함
@@ -432,7 +432,7 @@ def get_ai_feedback(question, paragraph, original_paragraph_index):
         
         # Create LLM instances with different temperatures
         classification_llm = OpenAI(temperature=0.1, openai_api_key=api_key)  # Low temperature for consistent classification
-        generation_llm = OpenAI(temperature=0.5, openai_api_key=api_key)     # Medium temperature for creative question generation
+        generation_llm = OpenAI(temperature=0.4, openai_api_key=api_key)     # Medium temperature for creative question generation
         
         # Chain 1: Bloom's Taxonomy Classification (Temperature 0.1)
         classification_chain = create_bloom_classification_chain(classification_llm)
