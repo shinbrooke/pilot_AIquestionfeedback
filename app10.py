@@ -432,7 +432,7 @@ def get_ai_feedback(question, paragraph, original_paragraph_index):
         
         # Create LLM instances with different temperatures
         classification_llm = OpenAI(temperature=0.1, openai_api_key=api_key)  # Low temperature for consistent classification
-        generation_llm = OpenAI(temperature=0.7, openai_api_key=api_key)     # Medium temperature for creative question generation
+        generation_llm = OpenAI(temperature=0.5, openai_api_key=api_key)     # Medium temperature for creative question generation
         
         # Chain 1: Bloom's Taxonomy Classification (Temperature 0.1)
         classification_chain = create_bloom_classification_chain(classification_llm)
