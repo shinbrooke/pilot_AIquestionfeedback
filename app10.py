@@ -340,7 +340,7 @@ def create_related_question_generation_chain(llm):
             template="Paragraph: {paragraph}\nUser Question: {user_question}\nSuggested Question: {suggested_question}"
         ),
         prefix="""다음은 사용자의 질문 요소를 활용해 '창조' 수준의 질문을 제안하는 예시들입니다:""",
-        suffix="""이제 다음 조건을 반드시 *모두* 따라 새로운 질문을 제안해주세요:
+        suffix="""이제 다음 조건을 반드시 *모두* 따라 새로운 질문을 하나만 제안해주세요:
 
 조건:
 1. 대학교 학부생인 학습자가 paragraph를 읽고 수업에서 제기할 법한 질문
@@ -383,7 +383,7 @@ def create_unrelated_question_generation_chain(llm):
             template="Paragraph: {paragraph}\nUser Question: {user_question}\nSuggested Question: {suggested_question}"
         ),
         prefix="""다음은 사용자의 질문과 무관하게 paragraph만을 기반으로 '창조' 수준의 질문을 제안하는 예시들입니다:""",
-        suffix="""이제 다음 조건을 반드시 *모두* 따라 새로운 질문을 제안해주세요:
+        suffix="""이제 다음 조건을 반드시 *모두* 따라 새로운 질문을 하나만 제안해주세요:
 
 조건:
 1. 대학교 학부생인 학습자가 paragraph를 읽고 수업에서 제기할 법한 질문
