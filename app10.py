@@ -364,24 +364,41 @@ def create_related_question_generation_chain(llm):
             input_variables=["paragraph", "user_question", "suggested_question"],
             template="Paragraph: {paragraph}\nUser Question: {user_question}\nSuggested Question: {suggested_question}"
         ),
-        prefix="""다음은 사용자의 질문 요소를 활용해 '창조' 수준의 질문을 제안하는 예시들입니다:""",
+        prefix="""다음은 사용자의 질문 요소를 활용해 '창조' 수준의 질문을 제안하는 예시들입니다:
+
+중요 지침: 
+- 반드시 사용자의 원래 질문에서 핵심 단어나 개념을 포함해야 합니다
+- 사용자 질문을 확장하고 발전시키는 방향으로 작성하세요
+- 완전히 새로운 주제로 바꾸지 마세요
+- 사용자의 관심사와 접근법을 더 깊이 탐구하세요
+
+예시들:""",
         suffix="""이제 다음 조건을 반드시 *모두* 따라 새로운 질문을 하나만 제안해주세요:
 
+핵심 원칙: 학습자의 기존 질문을 발전시키고 확장하는 방향으로 질문을 구성하세요.
+
 조건:
-1. 대학교 학부생인 학습자가 paragraph를 읽고 수업에서 제기할 법한 질문
-2. Bloom's taxonomy에서 '창조' 수준의 질문 (새롭고 창의적인 연구 문제를 제안)
-3. 학습자가 기존에 제시한 질문(question)에서 핵심 내용을 그대로 포함하고, paragraph 내 새로운 내용을 결합하여 질문 구성
-4. Open-ended question, 즉 여러 답이 가능한 질문이어야 함
+1. 학습자가 기존에 제시한 질문(question)의 핵심 키워드와 주제를 반드시 포함해야 함
+2. 기존 질문에서 제기한 관점이나 접근법을 더 깊이 있게 탐구하는 방향
+3. 기존 질문 + paragraph의 새로운 내용을 결합하여 확장된 질문 구성
+4. Bloom's taxonomy에서 '창조' 수준의 질문 (새롭고 창의적인 연구 문제를 제안)
 5. 대학교 학부생 수준에서 이해 가능해야 함
-6. 질문은 한국어로 한 문장이어야 함
+6. 질문은 한국어로 한 문장이어야 함 (최대 70자 이내)
 7. 물음표로 끝나야 함
+
+금지사항:
+- 기존 질문과 완전히 다른 주제로 바꾸는 것
+- 기존 질문의 핵심 개념을 무시하는 것
+- 기존 질문보다 단순한 수준의 질문
+
+중요: 학습자의 원래 질문 "{question}"의 핵심 요소를 반드시 포함하고 발전시켜야 합니다.
 
 Paragraph: {paragraph}
 User Question: {question}
 
 {format_instructions}
 
-새로운 질문:""",
+새로운 질문 (기존 질문을 발전시킨 버전):""",
         input_variables=["paragraph", "question"],
         partial_variables={"format_instructions": parser.get_format_instructions()}
     )
@@ -414,24 +431,44 @@ def create_unrelated_question_generation_chain(llm):
             input_variables=["paragraph", "user_question", "suggested_question"],
             template="Paragraph: {paragraph}\nUser Question: {user_question}\nSuggested Question: {suggested_question}"
         ),
-        prefix="""다음은 사용자의 질문과 무관하게 paragraph만을 기반으로 '창조' 수준의 질문을 제안하는 예시들입니다:""",
+        prefix="""다음은 사용자의 질문과 무관하게 paragraph만을 기반으로 '창조' 수준의 질문을 제안하는 예시들입니다:
+
+중요 지침:
+- 사용자의 원래 질문에서 사용된 단어나 개념을 절대 사용하지 마세요
+- 사용자 질문과는 완전히 다른 각도에서 접근하세요
+- 사용자 질문을 발전시키거나 확장하지 마세요
+- paragraph의 다른 측면이나 요소에 집중하세요
+
+예시들:""",
         suffix="""이제 다음 조건을 반드시 *모두* 따라 새로운 질문을 하나만 제안해주세요:
 
+핵심 원칙: 제시된 Paragraph 내에서, 학습자의 기존 질문과는 완전히 다른 관점을 탐구하는 질문을 구성하세요.
+
 조건:
-1. 대학교 학부생인 학습자가 paragraph를 읽고 수업에서 제기할 법한 질문
-2. Bloom's taxonomy에서 '창조' 수준의 질문 (새롭고 창의적인 연구 문제를 제안)
-3. 학습자가 기존에 제시한 질문(question)의 내용을 직간접적으로 전혀 사용하지 않고, paragraph 내 새로운 내용만으로 구성
-4. Open-ended question, 즉 여러 답이 가능한 질문이어야 함
-5. 대학교 학부생 수준에서 이해 가능해야 함
-6. 질문은 한국어로 한 문장이어야 함
-7. 물음표로 끝나야 함
+1. 반드시 제시된 Paragraph의 내용과 직접 관련된 질문이어야 함
+2. 학습자가 기존에 제시한 질문(question)의 키워드, 주제, 접근법을 일절 사용하지 말 것
+3. Paragraph에서 기존 질문이 다루지 않은 완전히 다른 측면이나 요소를 선택
+4. 같은 텍스트 내의 다른 개념, 인물, 시대, 방법론, 분야 등에 집중
+5. Bloom's taxonomy에서 '창조' 수준의 질문 (새롭고 창의적인 연구 문제를 제안)
+6. 대학교 학부생 수준에서 이해 가능해야 함
+7. 질문은 한국어로 한 문장이어야 함 (최대 70자 이내)
+8. 물음표로 끝나야 함
+
+금지사항:
+- Paragraph 범위를 벗어나 완전히 다른 주제로 가는 것
+- 기존 질문에서 언급된 개념이나 단어 재사용
+- Paragraph에 없는 내용을 추가하는 것
+
+전략: Paragraph를 다시 읽고, 사용자가 주목하지 않은 다른 요소(인물, 시대적 배경, 다른 개념, 응용 분야, 사회적 함의 등)를 찾아 질문하세요.
+
+중요: 학습자의 원래 질문 "{question}"과는 완전히 무관하지만, Paragraph 내용에는 반드시 기반해야 합니다.
 
 Paragraph: {paragraph}
 User Question: {question}
 
 {format_instructions}
 
-새로운 질문:""",
+새로운 질문 (기존 질문과 무관한 새로운 관점):""",
         input_variables=["paragraph", "question"],
         partial_variables={"format_instructions": parser.get_format_instructions()}
     )
@@ -442,6 +479,102 @@ User Question: {question}
         output_key="question_suggestion",
         output_parser=parser
     )
+
+def check_question_relatedness(original_question, suggested_question, should_be_related=True):
+    """
+    Check if the suggested question is appropriately related/unrelated to the original.
+    Returns True if the relatedness matches the expectation.
+    """
+    # Extract key terms from original question
+    original_words = set(original_question.replace('?', '').replace('.', '').replace(',', '').split())
+    suggested_words = set(suggested_question.replace('?', '').replace('.', '').replace(',', '').split())
+    
+    # Filter out common words (more comprehensive list)
+    common_words = {
+        '이', '그', '저', '것', '수', '있', '없', '는', '을', '를', '이', '가', '에', '의', '로', '으로', 
+        '와', '과', '어떤', '어떻게', '왜', '무엇', '언제', '어디서', '어떠한', '그런', '이런', '저런',
+        '하는', '되는', '있는', '없는', '같은', '다른', '새로운', '기존', '현재', '미래', '과거',
+        '대한', '위한', '통해', '따라', '관련', '문제', '방법', '방식', '경우', '상황', '조건',
+        '결과', '영향', '효과', '중요', '필요', '가능', '연구', '분석', '탐구', '제안', '개발',
+        '창조', '혁신', '아이디어', '해결', '답', '질문', '생각', '고려', '검토', '평가'
+    }
+    
+    # Remove common words to focus on content words
+    original_content_words = original_words - common_words
+    suggested_content_words = suggested_words - common_words
+    
+    # Calculate overlap
+    overlap = len(original_content_words & suggested_content_words)
+    overlap_ratio = overlap / max(len(original_content_words), 1) if original_content_words else 0
+    
+    # Also check for semantic similarity (simple keyword matching)
+    # This catches cases where different words refer to the same concepts
+    original_text = original_question.lower()
+    suggested_text = suggested_question.lower()
+    
+    # Count shared concepts (even with different words)
+    concept_overlap = 0
+    for word in original_content_words:
+        if len(word) > 2 and word in suggested_text:  # Only count meaningful words
+            concept_overlap += 1
+    
+    concept_ratio = concept_overlap / max(len(original_content_words), 1) if original_content_words else 0
+    
+    # Combine word overlap and concept overlap
+    total_similarity = max(overlap_ratio, concept_ratio)
+    
+    if should_be_related:
+        return total_similarity >= 0.25  # At least 25% similarity for related
+    else:
+        return total_similarity <= 0.15  # Less than 15% similarity for unrelated
+
+def get_fallback_question(feedback_type, original_question):
+    """Generate appropriate fallback questions when validation fails."""
+    if feedback_type == "related":
+        # Extract a key concept from original question for fallback
+        words = original_question.replace('?', '').split()
+        content_words = [w for w in words if len(w) > 2 and w not in ['어떤', '어떻게', '무엇', '왜']]
+        if content_words:
+            key_concept = content_words[0]
+            return f"{key_concept}을 바탕으로 새로운 연구 방향을 제안해볼 수 있을까?"
+        else:
+            return "이 개념을 바탕으로 새로운 연구 방향을 제안해볼 수 있을까?"
+    else:  # unrelated
+        # Paragraph-grounded fallback questions that stay within the text scope
+        fallback_questions = [
+            "이 주제의 다른 측면을 새롭게 탐구할 수 있는 방법은 무엇일까?",
+            "텍스트에서 다루지 않은 관련 요소를 발전시킬 수 있을까?",
+            "이 개념을 다른 방향으로 확장해볼 수 있는 방안은 무엇일까?",
+            "텍스트 내 다른 관점에서 새로운 접근법을 제안할 수 있을까?"
+        ]
+        import random
+        return random.choice(fallback_questions)
+    
+def check_paragraph_relevance(paragraph, suggested_question):
+    """Check if the question stays within the paragraph's scope."""
+    
+    # Extract key terms from paragraph
+    paragraph_words = set(paragraph.lower().split())
+    question_words = set(suggested_question.lower().split())
+    
+    # Remove common words
+    common_words = {
+        '이', '그', '저', '것', '수', '있', '없', '는', '을', '를', '이', '가', '에', '의', '로', '으로', 
+        '와', '과', '어떤', '어떻게', '왜', '무엇', '언제', '어디서', '어떠한', '그런', '이런', '저런',
+        '하는', '되는', '있는', '없는', '같은', '다른', '새로운', '기존', '현재', '미래', '과거',
+        '대한', '위한', '통해', '따라', '관련', '문제', '방법', '방식', '경우', '상황', '조건',
+        '결과', '영향', '효과', '중요', '필요', '가능', '연구', '분석', '탐구', '제안', '개발',
+        '창조', '혁신', '아이디어', '해결', '답', '질문', '생각', '고려', '검토', '평가'
+    }
+    
+    paragraph_content = paragraph_words - common_words
+    question_content = question_words - common_words
+    
+    # Check for overlap with paragraph content
+    overlap = len(paragraph_content & question_content)
+    relevance_ratio = overlap / max(len(question_content), 1)
+    
+    return relevance_ratio >= 0.2  # At least 20% of question words should relate to paragraph
 
 # Function to get AI feedback using LangChain
 def get_ai_feedback(question, paragraph, original_paragraph_index):
@@ -487,41 +620,62 @@ def get_ai_feedback(question, paragraph, original_paragraph_index):
         max_classification_retries = 3
         bloom_level = None
         
-        for attempt in range(max_classification_retries):
+        for attempt in range(max_generation_retries):
             try:
-                classification_result = classification_chain.run({
+                suggestion_result = question_generation_chain.run({
                     "paragraph": paragraph,
                     "question": question
                 })
                 
-                # Extract bloom_level from the structured output
-                if hasattr(classification_result, 'bloom_level'):
-                    bloom_level = classification_result.bloom_level
-                elif isinstance(classification_result, dict) and 'bloom_level' in classification_result:
-                    bloom_level = classification_result['bloom_level']
+                # Extract suggested_question from the structured output
+                if hasattr(suggestion_result, 'suggested_question'):
+                    suggested_question = suggestion_result.suggested_question
+                elif isinstance(suggestion_result, dict) and 'suggested_question' in suggestion_result:
+                    suggested_question = suggestion_result['suggested_question']
                 else:
-                    # Fallback parsing
-                    bloom_level = str(classification_result).strip()
+                    suggested_question = str(suggestion_result).strip()
                 
-                # Validate the bloom level
-                valid_levels = ["기억", "이해", "적용", "분석", "평가", "창조"]
-                if bloom_level not in valid_levels:
-                    # Try to extract valid level from the response
-                    for level in valid_levels:
-                        if level in str(classification_result):
-                            bloom_level = level
-                            break
-                    else:
-                        bloom_level = "이해"  # Default fallback
+                # Validate format (length and question mark)
+                if not suggested_question or len(suggested_question) > 80:
+                    print(f"Attempt {attempt + 1}: Invalid format (length: {len(suggested_question) if suggested_question else 0})")
+                    continue
+                    
+                if not suggested_question.endswith('?'):
+                    suggested_question += '?'
                 
-                break  # Success, exit retry loop
+                # Check 1: Paragraph relevance (prevents topic divergence)
+                paragraph_relevant = check_paragraph_relevance(paragraph, suggested_question)
+                if not paragraph_relevant:
+                    print(f"Attempt {attempt + 1}: Question diverged from paragraph topic")
+                    continue
                 
+                # Check 2: Relatedness validation
+                is_appropriately_related = check_question_relatedness(
+                    question, 
+                    suggested_question, 
+                    should_be_related=(feedback_type == "related")
+                )
+                
+                if is_appropriately_related:
+                    print(f"Success on attempt {attempt + 1}: Generated {feedback_type} question")
+                    break  # Success - all validations passed
+                else:
+                    expected = "related" if feedback_type == "related" else "unrelated"
+                    actual = "related" if check_question_relatedness(question, suggested_question, True) else "unrelated"
+                    print(f"Attempt {attempt + 1}: Relatedness mismatch. Expected {expected}, got {actual}")
+                    continue
+                    
             except (OutputParserException, ValueError, AttributeError) as e:
-                print(f"Classification attempt {attempt + 1} failed: {e}")
-                if attempt == max_classification_retries - 1:
-                    bloom_level = "이해"  # Final fallback
+                print(f"Question generation attempt {attempt + 1} failed: {e}")
                 continue
-        
+
+        # Use fallback if all attempts failed
+        if suggested_question is None or not check_paragraph_relevance(paragraph, suggested_question) or not check_question_relatedness(
+            question, suggested_question, should_be_related=(feedback_type == "related")
+        ):
+            print(f"All attempts failed, using fallback for {feedback_type} condition")
+            suggested_question = get_fallback_question(feedback_type, question)
+    
         # Generate feedback based on feedback type
         if feedback_type == "no_feedback":
             # Only provide Bloom's taxonomy classification and the specified message
@@ -532,11 +686,11 @@ def get_ai_feedback(question, paragraph, original_paragraph_index):
                 question_generation_chain = create_related_question_generation_chain(generation_llm)
             else:  # unrelated
                 question_generation_chain = create_unrelated_question_generation_chain(generation_llm)
-            
-            # Execute question generation with error handling
-            max_generation_retries = 3
+
+            # Execute question generation with error handling and validation
+            max_generation_retries = 5  # Increased retries for validation
             suggested_question = None
-            
+
             for attempt in range(max_generation_retries):
                 try:
                     suggestion_result = question_generation_chain.run({
@@ -552,21 +706,41 @@ def get_ai_feedback(question, paragraph, original_paragraph_index):
                     else:
                         suggested_question = str(suggestion_result).strip()
                     
-                    # Validate the suggested question
-                    if suggested_question and suggested_question.endswith('?'):
-                        break  # Success, exit retry loop
+                    # Validate format (length and question mark)
+                    if not suggested_question or len(suggested_question) > 80:
+                        print(f"Attempt {attempt + 1}: Invalid format (length: {len(suggested_question) if suggested_question else 0})")
+                        continue
+                        
+                    if not suggested_question.endswith('?'):
+                        suggested_question += '?'
+                    
+                    # Validate relatedness
+                    is_appropriately_related = check_question_relatedness(
+                        question, 
+                        suggested_question, 
+                        should_be_related=(feedback_type == "related")
+                    )
+                    
+                    if is_appropriately_related:
+                        print(f"Success on attempt {attempt + 1}: Generated {feedback_type} question")
+                        break  # Success - both format and relatedness are correct
                     else:
-                        # Add question mark if missing
-                        if suggested_question and not suggested_question.endswith('?'):
-                            suggested_question += '?'
-                        break
+                        expected = "related" if feedback_type == "related" else "unrelated"
+                        actual = "related" if check_question_relatedness(question, suggested_question, True) else "unrelated"
+                        print(f"Attempt {attempt + 1}: Relatedness mismatch. Expected {expected}, got {actual}")
+                        continue
                         
                 except (OutputParserException, ValueError, AttributeError) as e:
                     print(f"Question generation attempt {attempt + 1} failed: {e}")
-                    if attempt == max_generation_retries - 1:
-                        suggested_question = "이 내용을 바탕으로 새로운 연구 방향을 제안해볼 수 있을까?"  # Final fallback
                     continue
-            
+
+            # Use fallback if all attempts failed
+            if suggested_question is None or not check_question_relatedness(
+                question, suggested_question, should_be_related=(feedback_type == "related")
+            ):
+                print(f"All attempts failed, using fallback for {feedback_type} condition")
+                suggested_question = get_fallback_question(feedback_type, question)
+
             final_response = f"'{bloom_level}' 수준의 질문을 작성하셨군요.\n'{suggested_question}'와 같은 질문으로 수정하는 것은 어떨까요?"
         
         # Log the chain execution details
