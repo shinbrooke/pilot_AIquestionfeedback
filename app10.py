@@ -577,7 +577,6 @@ def check_paragraph_relevance(paragraph, suggested_question):
     return relevance_ratio >= 0.2  # At least 20% of question words should relate to paragraph
 
 # Function to get AI feedback using LangChain
-# Function to get AI feedback using LangChain
 def get_ai_feedback(question, paragraph, original_paragraph_index):
     """
     Generate AI feedback using multi-chain architecture with structured output parsing.
@@ -653,6 +652,7 @@ def get_ai_feedback(question, paragraph, original_paragraph_index):
         if feedback_type == "no_feedback":
             # Only provide Bloom's taxonomy classification and the specified message
             final_response = f"'{bloom_level}' 수준의 질문을 작성하셨군요.\n다음 단계로 넘어가면 질문을 수정할 기회가 주어집니다. 더 창의적인 질문으로 수정하는 것은 어떨까요?"
+            suggested_question = None  # No suggestion for no_feedback condition
         else:
             # Generate suggested question for related/unrelated feedback
             if feedback_type == "related":
@@ -714,10 +714,14 @@ def get_ai_feedback(question, paragraph, original_paragraph_index):
                     continue
 
             # Use fallback if all attempts failed
-            if suggested_question is None or not check_paragraph_relevance(paragraph, suggested_question) or not check_question_relatedness(
-                question, suggested_question, should_be_related=(feedback_type == "related")
-            ):
+            if suggested_question is None:
                 print(f"All attempts failed, using fallback for {feedback_type} condition")
+                suggested_question = get_fallback_question(feedback_type, question)
+            elif not check_paragraph_relevance(paragraph, suggested_question):
+                print(f"Final question failed paragraph relevance check, using fallback")
+                suggested_question = get_fallback_question(feedback_type, question)
+            elif not check_question_relatedness(question, suggested_question, should_be_related=(feedback_type == "related")):
+                print(f"Final question failed relatedness check, using fallback")
                 suggested_question = get_fallback_question(feedback_type, question)
 
             final_response = f"'{bloom_level}' 수준의 질문을 작성하셨군요.\n'{suggested_question}'와 같은 질문으로 수정하는 것은 어떨까요?"
@@ -728,7 +732,7 @@ def get_ai_feedback(question, paragraph, original_paragraph_index):
             "generation_temperature": 0.7 if feedback_type != "no_feedback" else None,
             "model_name": "gpt-4-0613",
             "bloom_level_classified": bloom_level,
-            "suggested_question": suggested_question if feedback_type != "no_feedback" else None,
+            "suggested_question": suggested_question,
             "feedback_type": feedback_type,
             "original_paragraph_index": original_paragraph_index
         })
