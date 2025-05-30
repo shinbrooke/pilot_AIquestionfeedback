@@ -620,7 +620,7 @@ def get_ai_feedback(question, paragraph, original_paragraph_index):
         max_classification_retries = 3
         bloom_level = None
         
-        for attempt in range(max_generation_retries):
+        for attempt in range(5):
             try:
                 suggestion_result = question_generation_chain.run({
                     "paragraph": paragraph,
