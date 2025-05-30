@@ -5,7 +5,7 @@ import json
 import os
 import random
 from datetime import datetime
-from langchain_openai import OpenAI
+from langchain_openai import ChatOpenAI
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 from dotenv import load_dotenv
@@ -601,13 +601,13 @@ def get_ai_feedback(question, paragraph, original_paragraph_index):
         
         # Create LLM instances with GPT-4 model specification and different temperatures
         classification_llm = OpenAI(
-            model_name="gpt-4-0613",  # Specify GPT-4 model
+            model="gpt-4-0613",  # Specify GPT-4 model
             temperature=0.1, 
             openai_api_key=api_key,
             max_retries=2
         )
         generation_llm = OpenAI(
-            model_name="gpt-4-0613",  # Specify GPT-4 model
+            model="gpt-4-0613",  # Specify GPT-4 model
             temperature=0.7, 
             openai_api_key=api_key,
             max_retries=2
@@ -730,7 +730,7 @@ def get_ai_feedback(question, paragraph, original_paragraph_index):
         log_event("AI feedback chain execution", {
             "classification_temperature": 0.1,
             "generation_temperature": 0.7 if feedback_type != "no_feedback" else None,
-            "model_name": "gpt-4-0613",
+            "model": "gpt-4-0613",
             "bloom_level_classified": bloom_level,
             "suggested_question": suggested_question,
             "feedback_type": feedback_type,
