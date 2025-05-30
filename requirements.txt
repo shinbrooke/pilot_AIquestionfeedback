@@ -3,4 +3,4 @@ pandas
 python-dotenv
 langchain
 langchain-openai
-chatopenai
+openai
