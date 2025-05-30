@@ -577,6 +577,7 @@ def check_paragraph_relevance(paragraph, suggested_question):
     return relevance_ratio >= 0.2  # At least 20% of question words should relate to paragraph
 
 # Function to get AI feedback using LangChain
+# Function to get AI feedback using LangChain
 def get_ai_feedback(question, paragraph, original_paragraph_index):
     """
     Generate AI feedback using multi-chain architecture with structured output parsing.
@@ -620,61 +621,33 @@ def get_ai_feedback(question, paragraph, original_paragraph_index):
         max_classification_retries = 3
         bloom_level = None
         
-        for attempt in range(5):
+        for attempt in range(max_classification_retries):
             try:
-                suggestion_result = question_generation_chain.run({
+                classification_result = classification_chain.run({
                     "paragraph": paragraph,
                     "question": question
                 })
                 
-                # Extract suggested_question from the structured output
-                if hasattr(suggestion_result, 'suggested_question'):
-                    suggested_question = suggestion_result.suggested_question
-                elif isinstance(suggestion_result, dict) and 'suggested_question' in suggestion_result:
-                    suggested_question = suggestion_result['suggested_question']
+                # Extract bloom_level from the structured output
+                if hasattr(classification_result, 'bloom_level'):
+                    bloom_level = classification_result.bloom_level
+                elif isinstance(classification_result, dict) and 'bloom_level' in classification_result:
+                    bloom_level = classification_result['bloom_level']
                 else:
-                    suggested_question = str(suggestion_result).strip()
+                    bloom_level = str(classification_result).strip()
                 
-                # Validate format (length and question mark)
-                if not suggested_question or len(suggested_question) > 80:
-                    print(f"Attempt {attempt + 1}: Invalid format (length: {len(suggested_question) if suggested_question else 0})")
-                    continue
-                    
-                if not suggested_question.endswith('?'):
-                    suggested_question += '?'
-                
-                # Check 1: Paragraph relevance (prevents topic divergence)
-                paragraph_relevant = check_paragraph_relevance(paragraph, suggested_question)
-                if not paragraph_relevant:
-                    print(f"Attempt {attempt + 1}: Question diverged from paragraph topic")
-                    continue
-                
-                # Check 2: Relatedness validation
-                is_appropriately_related = check_question_relatedness(
-                    question, 
-                    suggested_question, 
-                    should_be_related=(feedback_type == "related")
-                )
-                
-                if is_appropriately_related:
-                    print(f"Success on attempt {attempt + 1}: Generated {feedback_type} question")
-                    break  # Success - all validations passed
-                else:
-                    expected = "related" if feedback_type == "related" else "unrelated"
-                    actual = "related" if check_question_relatedness(question, suggested_question, True) else "unrelated"
-                    print(f"Attempt {attempt + 1}: Relatedness mismatch. Expected {expected}, got {actual}")
-                    continue
+                if bloom_level:
+                    print(f"Classification success on attempt {attempt + 1}: {bloom_level}")
+                    break
                     
             except (OutputParserException, ValueError, AttributeError) as e:
-                print(f"Question generation attempt {attempt + 1} failed: {e}")
+                print(f"Classification attempt {attempt + 1} failed: {e}")
                 continue
 
-        # Use fallback if all attempts failed
-        if suggested_question is None or not check_paragraph_relevance(paragraph, suggested_question) or not check_question_relatedness(
-            question, suggested_question, should_be_related=(feedback_type == "related")
-        ):
-            print(f"All attempts failed, using fallback for {feedback_type} condition")
-            suggested_question = get_fallback_question(feedback_type, question)
+        # Use fallback if classification failed
+        if bloom_level is None:
+            bloom_level = "기억"  # Default fallback
+            print("Classification failed, using fallback: 기억")
     
         # Generate feedback based on feedback type
         if feedback_type == "no_feedback":
@@ -714,7 +687,13 @@ def get_ai_feedback(question, paragraph, original_paragraph_index):
                     if not suggested_question.endswith('?'):
                         suggested_question += '?'
                     
-                    # Validate relatedness
+                    # Check 1: Paragraph relevance (prevents topic divergence)
+                    paragraph_relevant = check_paragraph_relevance(paragraph, suggested_question)
+                    if not paragraph_relevant:
+                        print(f"Attempt {attempt + 1}: Question diverged from paragraph topic")
+                        continue
+                    
+                    # Check 2: Relatedness validation
                     is_appropriately_related = check_question_relatedness(
                         question, 
                         suggested_question, 
@@ -723,7 +702,7 @@ def get_ai_feedback(question, paragraph, original_paragraph_index):
                     
                     if is_appropriately_related:
                         print(f"Success on attempt {attempt + 1}: Generated {feedback_type} question")
-                        break  # Success - both format and relatedness are correct
+                        break  # Success - all validations passed
                     else:
                         expected = "related" if feedback_type == "related" else "unrelated"
                         actual = "related" if check_question_relatedness(question, suggested_question, True) else "unrelated"
@@ -735,7 +714,7 @@ def get_ai_feedback(question, paragraph, original_paragraph_index):
                     continue
 
             # Use fallback if all attempts failed
-            if suggested_question is None or not check_question_relatedness(
+            if suggested_question is None or not check_paragraph_relevance(paragraph, suggested_question) or not check_question_relatedness(
                 question, suggested_question, should_be_related=(feedback_type == "related")
             ):
                 print(f"All attempts failed, using fallback for {feedback_type} condition")
@@ -746,10 +725,10 @@ def get_ai_feedback(question, paragraph, original_paragraph_index):
         # Log the chain execution details
         log_event("AI feedback chain execution", {
             "classification_temperature": 0.1,
-            "generation_temperature": 0.4 if feedback_type != "no_feedback" else None,
+            "generation_temperature": 0.7 if feedback_type != "no_feedback" else None,
             "model_name": "gpt-4-0613",
             "bloom_level_classified": bloom_level,
-            "suggested_question": final_response.split('\n')[1] if feedback_type != "no_feedback" else None,
+            "suggested_question": suggested_question if feedback_type != "no_feedback" else None,
             "feedback_type": feedback_type,
             "original_paragraph_index": original_paragraph_index
         })
@@ -766,7 +745,7 @@ def get_ai_feedback(question, paragraph, original_paragraph_index):
                 return f"OpenAI API quota exceeded. Please add a payment method to your OpenAI account. For now, using mock response: '기억' 수준의 질문을 작성하셨군요.\n'이 내용을 바탕으로 새로운 아이디어나 해결책을 제안해보세요?'와 같은 질문으로 수정하는 것은 어떨까요?\n\n[실험 조건: {fallback_type} 피드백]"
         else:
             return f"Error generating AI feedback: {error_msg}"
-
+        
 # Initialize session state variables if they don't exist
 def initialize_session_state():
     if 'started' not in st.session_state:
