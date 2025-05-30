@@ -23,7 +23,11 @@ class BloomClassification(BaseModel):
     bloom_level: str = Field(description="The Bloom's taxonomy level: 기억, 이해, 적용, 분석, 평가, or 창조")
 
 class QuestionSuggestion(BaseModel):
-    suggested_question: str = Field(description="A single suggested question in Korean ending with a question mark")
+    suggested_question: str = Field(
+        description="A single suggested question in Korean ending with a question mark",
+        min_length=60,
+        max_length=70
+    )
 
 # Import paragraphs from config file
 try:
