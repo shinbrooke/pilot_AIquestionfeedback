@@ -600,13 +600,13 @@ def get_ai_feedback(question, paragraph, original_paragraph_index):
             return "Error: OpenAI API key not found. Please set OPENAI_API_KEY in your environment variables or .env file."
         
         # Create LLM instances with GPT-4 model specification and different temperatures
-        classification_llm = OpenAI(
+        classification_llm = ChatOpenAI(
             model="gpt-4-0613",  # Specify GPT-4 model
             temperature=0.1, 
             openai_api_key=api_key,
             max_retries=2
         )
-        generation_llm = OpenAI(
+        generation_llm = ChatOpenAI(
             model="gpt-4-0613",  # Specify GPT-4 model
             temperature=0.7, 
             openai_api_key=api_key,
