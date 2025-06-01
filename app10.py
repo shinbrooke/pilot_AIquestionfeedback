@@ -18,6 +18,9 @@ from langchain.output_parsers import PydanticOutputParser
 from langchain.schema import OutputParserException
 from pydantic import BaseModel, Field
 
+# streamlit cache related import
+from functools import lru_cache
+
 # Pydantic models for structured output
 class BloomClassification(BaseModel):
     bloom_level: str = Field(description="The Bloom's taxonomy level: 기억, 이해, 적용, 분석, 평가, or 창조")
@@ -207,6 +210,13 @@ def send_marker(marker_type):
     log_event(f"MARKER: {marker_type}")
 
 # Function to log events
+def log_event_batched(event_description, data=None):
+    """Optimized logging with batching for non-critical events"""
+    if hasattr(st.session_state, 'logger'):
+        st.session_state.logger.add_event(event_description, data)
+    else:
+        log_event(event_description, data)  # Fallback
+
 def log_event(event_description, data=None):
     if 'event_log' not in st.session_state:
         st.session_state.event_log = []
@@ -255,19 +265,11 @@ def get_current_csv_data():
         return df.to_csv(index=False)
     return ""
 
+@st.cache_data
 def create_condition_assignment(total_paragraphs=45, condition_randomization_seed=None):
     """
     Create randomized condition assignments for paragraphs with balanced topic distribution.
-    
-    Assumes 5 topics with 9 paragraphs each (paragraphs 0-8: topic 1, 9-17: topic 2, etc.)
-    Each condition gets 3 paragraphs from each topic.
-    
-    Args:
-        total_paragraphs: Total number of paragraphs (default 45)
-        condition_randomization_seed: Seed for condition randomization (None for random)
-    
-    Returns:
-        dict: Mapping from original paragraph index to feedback condition
+    Now cached to avoid recalculation.
     """
     if condition_randomization_seed is not None:
         random.seed(condition_randomization_seed)
@@ -289,6 +291,46 @@ def create_condition_assignment(total_paragraphs=45, condition_randomization_see
             condition_mapping[para_idx] = conditions[condition_idx]
     
     return condition_mapping
+
+@st.cache_resource
+def initialize_llm_models():
+    """Cache LLM model initialization to avoid repeated API setup"""
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        return None, None
+    
+    classification_llm = ChatOpenAI(
+        model="gpt-4-0613",
+        temperature=0.1,
+        openai_api_key=api_key,
+        max_retries=2
+    )
+    generation_llm = ChatOpenAI(
+        model="gpt-4-0613",
+        temperature=0.7,
+        openai_api_key=api_key,
+        max_retries=2
+    )
+    return classification_llm, generation_llm
+
+@st.cache_data
+def get_common_words():
+    """Precompute common word sets for validation"""
+    return {
+        '이', '그', '저', '것', '수', '있', '없', '는', '을', '를', '이', '가', '에', '의', '로', '으로', 
+        '와', '과', '어떤', '어떻게', '왜', '무엇', '언제', '어디서', '어떠한', '그런', '이런', '저런',
+        '하는', '되는', '있는', '없는', '같은', '다른', '새로운', '기존', '현재', '미래', '과거',
+        '대한', '위한', '통해', '따라', '관련', '문제', '방법', '방식', '경우', '상황', '조건',
+        '결과', '영향', '효과', '중요', '필요', '가능', '연구', '분석', '탐구', '제안', '개발',
+        '창조', '혁신', '아이디어', '해결', '답', '질문', '생각', '고려', '검토', '평가'
+    }
+
+@lru_cache(maxsize=1000)
+def get_content_words(text):
+    """Cache content word extraction"""
+    common_words = get_common_words()
+    words = set(text.replace('?', '').replace('.', '').replace(',', '').lower().split())
+    return words - common_words
 
 def create_bloom_classification_chain(llm):
     """Create a chain for classifying questions according to Bloom's taxonomy with structured output."""
@@ -383,7 +425,7 @@ def create_related_question_generation_chain(llm):
 3. 기존 질문 + paragraph의 새로운 내용을 결합하여 확장된 질문 구성
 4. Bloom's taxonomy에서 '창조' 수준의 질문 (새롭고 창의적인 연구 문제를 제안)
 5. 대학교 학부생 수준에서 이해 가능해야 함
-6. 질문은 한국어로 한 문장이어야 함 (최대 70자 이내)
+6. 질문은 한국어로 한 문장이어야 함 (글자수 65-75자)
 7. 물음표로 끝나야 함
 
 금지사항:
@@ -451,7 +493,7 @@ def create_unrelated_question_generation_chain(llm):
 4. 같은 텍스트 내의 다른 개념, 인물, 시대, 방법론, 분야 등에 집중
 5. Bloom's taxonomy에서 '창조' 수준의 질문 (새롭고 창의적인 연구 문제를 제안)
 6. 대학교 학부생 수준에서 이해 가능해야 함
-7. 질문은 한국어로 한 문장이어야 함 (최대 70자 이내)
+7. 질문은 한국어로 한 문장이어야 함 (글자수 65-75자)
 8. 물음표로 끝나야 함
 
 금지사항:
@@ -480,54 +522,6 @@ User Question: {question}
         output_parser=parser
     )
 
-def check_question_relatedness(original_question, suggested_question, should_be_related=True):
-    """
-    Check if the suggested question is appropriately related/unrelated to the original.
-    Returns True if the relatedness matches the expectation.
-    """
-    # Extract key terms from original question
-    original_words = set(original_question.replace('?', '').replace('.', '').replace(',', '').split())
-    suggested_words = set(suggested_question.replace('?', '').replace('.', '').replace(',', '').split())
-    
-    # Filter out common words (more comprehensive list)
-    common_words = {
-        '이', '그', '저', '것', '수', '있', '없', '는', '을', '를', '이', '가', '에', '의', '로', '으로', 
-        '와', '과', '어떤', '어떻게', '왜', '무엇', '언제', '어디서', '어떠한', '그런', '이런', '저런',
-        '하는', '되는', '있는', '없는', '같은', '다른', '새로운', '기존', '현재', '미래', '과거',
-        '대한', '위한', '통해', '따라', '관련', '문제', '방법', '방식', '경우', '상황', '조건',
-        '결과', '영향', '효과', '중요', '필요', '가능', '연구', '분석', '탐구', '제안', '개발',
-        '창조', '혁신', '아이디어', '해결', '답', '질문', '생각', '고려', '검토', '평가'
-    }
-    
-    # Remove common words to focus on content words
-    original_content_words = original_words - common_words
-    suggested_content_words = suggested_words - common_words
-    
-    # Calculate overlap
-    overlap = len(original_content_words & suggested_content_words)
-    overlap_ratio = overlap / max(len(original_content_words), 1) if original_content_words else 0
-    
-    # Also check for semantic similarity (simple keyword matching)
-    # This catches cases where different words refer to the same concepts
-    original_text = original_question.lower()
-    suggested_text = suggested_question.lower()
-    
-    # Count shared concepts (even with different words)
-    concept_overlap = 0
-    for word in original_content_words:
-        if len(word) > 2 and word in suggested_text:  # Only count meaningful words
-            concept_overlap += 1
-    
-    concept_ratio = concept_overlap / max(len(original_content_words), 1) if original_content_words else 0
-    
-    # Combine word overlap and concept overlap
-    total_similarity = max(overlap_ratio, concept_ratio)
-    
-    if should_be_related:
-        return total_similarity >= 0.25  # At least 25% similarity for related
-    else:
-        return total_similarity <= 0.15  # Less than 15% similarity for unrelated
-
 def get_fallback_question(feedback_type, original_question):
     """Generate appropriate fallback questions when validation fails."""
     if feedback_type == "related":
@@ -549,206 +543,227 @@ def get_fallback_question(feedback_type, original_question):
         ]
         import random
         return random.choice(fallback_questions)
+
+def get_bloom_classification_with_fallback(llm, paragraph, question, max_retries=2):
+    """Get Bloom classification with optimized retry logic"""
+    classification_chain = create_bloom_classification_chain(llm)
     
-def check_paragraph_relevance(paragraph, suggested_question):
-    """Check if the question stays within the paragraph's scope."""
+    for attempt in range(max_retries):
+        try:
+            result = classification_chain.run({"paragraph": paragraph, "question": question})
+            
+            # Extract bloom level
+            if hasattr(result, 'bloom_level'):
+                return result.bloom_level
+            elif isinstance(result, dict) and 'bloom_level' in result:
+                return result['bloom_level']
+            else:
+                bloom_level = str(result).strip()
+                if bloom_level:
+                    return bloom_level
+                    
+        except Exception as e:
+            if attempt == max_retries - 1:  # Last attempt
+                print(f"Classification failed after {max_retries} attempts: {e}")
+            continue
     
-    # Extract key terms from paragraph
-    paragraph_words = set(paragraph.lower().split())
-    question_words = set(suggested_question.lower().split())
+    return "기억"  # Default fallback
+
+def generate_question_without_validation(llm, paragraph, question, feedback_type, max_retries=3):
+    """Generate question without validation but with metrics collection"""
     
-    # Remove common words
-    common_words = {
-        '이', '그', '저', '것', '수', '있', '없', '는', '을', '를', '이', '가', '에', '의', '로', '으로', 
-        '와', '과', '어떤', '어떻게', '왜', '무엇', '언제', '어디서', '어떠한', '그런', '이런', '저런',
-        '하는', '되는', '있는', '없는', '같은', '다른', '새로운', '기존', '현재', '미래', '과거',
-        '대한', '위한', '통해', '따라', '관련', '문제', '방법', '방식', '경우', '상황', '조건',
-        '결과', '영향', '효과', '중요', '필요', '가능', '연구', '분석', '탐구', '제안', '개발',
-        '창조', '혁신', '아이디어', '해결', '답', '질문', '생각', '고려', '검토', '평가'
+    # Create appropriate chain
+    if feedback_type == "related":
+        chain = create_related_question_generation_chain(llm)
+    else:
+        chain = create_unrelated_question_generation_chain(llm)
+    
+    for attempt in range(max_retries):
+        try:
+            result = chain.run({"paragraph": paragraph, "question": question})
+            
+            # Extract question
+            if hasattr(result, 'suggested_question'):
+                suggested_question = result.suggested_question
+            elif isinstance(result, dict) and 'suggested_question' in result:
+                suggested_question = result['suggested_question']
+            else:
+                suggested_question = str(result).strip()
+            
+            # Basic format validation (just ensure it's not empty and has question mark)
+            if suggested_question and len(suggested_question.strip()) > 0:
+                if not suggested_question.endswith('?'):
+                    suggested_question += '?'
+                return suggested_question
+                
+        except Exception as e:
+            print(f"Attempt {attempt + 1} failed: {e}")
+            continue
+    
+    # Fallback if all attempts failed
+    return get_fallback_question(feedback_type, question)
+
+def calculate_question_metrics(original_question, suggested_question, paragraph):
+    """Calculate relatedness and other metrics for storage without validation"""
+    
+    # Calculate relatedness score
+    original_content = get_content_words(original_question)
+    suggested_content = get_content_words(suggested_question)
+    
+    if not original_content:
+        relatedness_score = 0.0
+    else:
+        # Calculate overlap ratios
+        overlap = len(original_content & suggested_content)
+        overlap_ratio = overlap / len(original_content)
+        
+        # Concept overlap check
+        concept_overlap = sum(1 for word in original_content if len(word) > 2 and word in suggested_question.lower())
+        concept_ratio = concept_overlap / len(original_content)
+        
+        relatedness_score = max(overlap_ratio, concept_ratio)
+    
+    # Calculate paragraph relevance
+    paragraph_content = get_content_words(paragraph)
+    question_content = get_content_words(suggested_question)
+    
+    if not question_content:
+        paragraph_relevance = 0.0
+    else:
+        overlap = len(paragraph_content & question_content)
+        paragraph_relevance = overlap / len(question_content)
+    
+    # Calculate length
+    question_length = len(suggested_question)
+    
+    # Calculate word count
+    question_word_count = len(suggested_question.split())
+    
+    return {
+        'relatedness_score': round(relatedness_score, 3),
+        'paragraph_relevance': round(paragraph_relevance, 3),
+        'question_length': question_length,
+        'question_word_count': question_word_count,
+        'ends_with_question_mark': suggested_question.endswith('?'),
+        'is_empty': len(suggested_question.strip()) == 0
     }
-    
-    paragraph_content = paragraph_words - common_words
-    question_content = question_words - common_words
-    
-    # Check for overlap with paragraph content
-    overlap = len(paragraph_content & question_content)
-    relevance_ratio = overlap / max(len(question_content), 1)
-    
-    return relevance_ratio >= 0.2  # At least 20% of question words should relate to paragraph
+
+def handle_api_error(error, feedback_type):
+    """Centralized API error handling"""
+    error_msg = str(error)
+    if "insufficient_quota" in error_msg or "quota" in error_msg.lower():
+        if feedback_type == "no_feedback":
+            return "OpenAI API quota exceeded. Using mock response: '기억' 수준의 질문을 작성하셨군요.\n다음 단계로 넘어가면 질문을 수정할 기회가 주어집니다."
+        else:
+            return "OpenAI API quota exceeded. Using mock response: '기억' 수준의 질문을 작성하셨군요.\n'이 내용을 바탕으로 새로운 아이디어를 제안해보세요?'와 같은 질문으로 수정하는 것은 어떨까요?"
+    else:
+        return f"Error generating AI feedback: {error_msg}"
 
 # Function to get AI feedback using LangChain
 def get_ai_feedback(question, paragraph, original_paragraph_index):
     """
-    Generate AI feedback using multi-chain architecture with structured output parsing.
-    
-    Args:
-        question: The participant's question
-        paragraph: The paragraph text
-        original_paragraph_index: The original index of the paragraph (before randomization)
-    
-    Returns:
-        str: The generated feedback
+    Optimized AI feedback generation without validation but with metrics collection
     """
     
-    # Determine feedback type based on condition assignment
     feedback_type = st.session_state.condition_mapping.get(original_paragraph_index, "no_feedback")
     
     try:
-        # Check if API key is available
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            return "Error: OpenAI API key not found. Please set OPENAI_API_KEY in your environment variables or .env file."
+        # Get cached LLM models
+        classification_llm, generation_llm = initialize_llm_models()
+        if not classification_llm:
+            return "Error: OpenAI API key not found."
         
-        # Create LLM instances with GPT-4 model specification and different temperatures
-        classification_llm = ChatOpenAI(
-            model="gpt-4-0613",  # Specify GPT-4 model
-            temperature=0.1, 
-            openai_api_key=api_key,
-            max_retries=2
-        )
-        generation_llm = ChatOpenAI(
-            model="gpt-4-0613",  # Specify GPT-4 model
-            temperature=0.7, 
-            openai_api_key=api_key,
-            max_retries=2
-        )
+        # STEP 1: Classification (always needed)
+        bloom_level = get_bloom_classification_with_fallback(classification_llm, paragraph, question)
         
-        # Chain 1: Bloom's Taxonomy Classification with structured output
-        classification_chain = create_bloom_classification_chain(classification_llm)
-        
-        # Execute classification with error handling
-        max_classification_retries = 3
-        bloom_level = None
-        
-        for attempt in range(max_classification_retries):
-            try:
-                classification_result = classification_chain.run({
-                    "paragraph": paragraph,
-                    "question": question
-                })
-                
-                # Extract bloom_level from the structured output
-                if hasattr(classification_result, 'bloom_level'):
-                    bloom_level = classification_result.bloom_level
-                elif isinstance(classification_result, dict) and 'bloom_level' in classification_result:
-                    bloom_level = classification_result['bloom_level']
-                else:
-                    bloom_level = str(classification_result).strip()
-                
-                if bloom_level:
-                    print(f"Classification success on attempt {attempt + 1}: {bloom_level}")
-                    break
-                    
-            except (OutputParserException, ValueError, AttributeError) as e:
-                print(f"Classification attempt {attempt + 1} failed: {e}")
-                continue
-
-        # Use fallback if classification failed
-        if bloom_level is None:
-            bloom_level = "기억"  # Default fallback
-            print("Classification failed, using fallback: 기억")
-    
-        # Generate feedback based on feedback type
+        # STEP 2: Generate suggestion only if needed
         if feedback_type == "no_feedback":
-            # Only provide Bloom's taxonomy classification and the specified message
-            final_response = f"'{bloom_level}' 수준의 질문을 작성하셨군요.\n다음 단계로 넘어가면 질문을 수정할 기회가 주어집니다. 더 창의적인 질문으로 수정하는 것은 어떨까요?"
-            suggested_question = None  # No suggestion for no_feedback condition
-        else:
-            # Generate suggested question for related/unrelated feedback
-            if feedback_type == "related":
-                question_generation_chain = create_related_question_generation_chain(generation_llm)
-            else:  # unrelated
-                question_generation_chain = create_unrelated_question_generation_chain(generation_llm)
-
-            # Execute question generation with error handling and validation
-            max_generation_retries = 5  # Increased retries for validation
             suggested_question = None
-
-            for attempt in range(max_generation_retries):
-                try:
-                    suggestion_result = question_generation_chain.run({
-                        "paragraph": paragraph,
-                        "question": question
-                    })
-                    
-                    # Extract suggested_question from the structured output
-                    if hasattr(suggestion_result, 'suggested_question'):
-                        suggested_question = suggestion_result.suggested_question
-                    elif isinstance(suggestion_result, dict) and 'suggested_question' in suggestion_result:
-                        suggested_question = suggestion_result['suggested_question']
-                    else:
-                        suggested_question = str(suggestion_result).strip()
-                    
-                    # Validate format (length and question mark)
-                    if not suggested_question or len(suggested_question) > 80:
-                        print(f"Attempt {attempt + 1}: Invalid format (length: {len(suggested_question) if suggested_question else 0})")
-                        continue
-                        
-                    if not suggested_question.endswith('?'):
-                        suggested_question += '?'
-                    
-                    # Check 1: Paragraph relevance (prevents topic divergence)
-                    paragraph_relevant = check_paragraph_relevance(paragraph, suggested_question)
-                    if not paragraph_relevant:
-                        print(f"Attempt {attempt + 1}: Question diverged from paragraph topic")
-                        continue
-                    
-                    # Check 2: Relatedness validation
-                    is_appropriately_related = check_question_relatedness(
-                        question, 
-                        suggested_question, 
-                        should_be_related=(feedback_type == "related")
-                    )
-                    
-                    if is_appropriately_related:
-                        print(f"Success on attempt {attempt + 1}: Generated {feedback_type} question")
-                        break  # Success - all validations passed
-                    else:
-                        expected = "related" if feedback_type == "related" else "unrelated"
-                        actual = "related" if check_question_relatedness(question, suggested_question, True) else "unrelated"
-                        print(f"Attempt {attempt + 1}: Relatedness mismatch. Expected {expected}, got {actual}")
-                        continue
-                        
-                except (OutputParserException, ValueError, AttributeError) as e:
-                    print(f"Question generation attempt {attempt + 1} failed: {e}")
-                    continue
-
-            # Use fallback if all attempts failed
-            if suggested_question is None:
-                print(f"All attempts failed, using fallback for {feedback_type} condition")
-                suggested_question = get_fallback_question(feedback_type, question)
-            elif not check_paragraph_relevance(paragraph, suggested_question):
-                print(f"Final question failed paragraph relevance check, using fallback")
-                suggested_question = get_fallback_question(feedback_type, question)
-            elif not check_question_relatedness(question, suggested_question, should_be_related=(feedback_type == "related")):
-                print(f"Final question failed relatedness check, using fallback")
-                suggested_question = get_fallback_question(feedback_type, question)
-
+            question_metrics = None
+            final_response = f"'{bloom_level}' 수준의 질문을 작성하셨군요.\n다음 단계로 넘어가면 질문을 수정할 기회가 주어집니다. 더 창의적인 질문으로 수정하는 것은 어떨까요?"
+        else:
+            # Generate question without validation
+            suggested_question = generate_question_without_validation(
+                generation_llm, paragraph, question, feedback_type
+            )
+            
+            # Calculate metrics for storage (but don't use for validation)
+            question_metrics = calculate_question_metrics(question, suggested_question, paragraph)
+            
             final_response = f"'{bloom_level}' 수준의 질문을 작성하셨군요.\n'{suggested_question}'와 같은 질문으로 수정하는 것은 어떨까요?"
         
-        # Log the chain execution details
-        log_event("AI feedback chain execution", {
-            "classification_temperature": 0.1,
-            "generation_temperature": 0.7 if feedback_type != "no_feedback" else None,
-            "model": "gpt-4-0613",
-            "bloom_level_classified": bloom_level,
+        # Store metrics in session state for later CSV inclusion
+        if question_metrics:
+            st.session_state.current_iteration_data.update({
+                'suggested_question_metrics': question_metrics
+            })
+        
+        # Log execution details
+        log_event("AI feedback generated", {
+            "bloom_level": bloom_level,
             "suggested_question": suggested_question,
             "feedback_type": feedback_type,
-            "original_paragraph_index": original_paragraph_index
+            "original_paragraph_index": original_paragraph_index,
+            "question_metrics": question_metrics
         })
         
         return final_response
         
     except Exception as e:
-        error_msg = str(e)
-        if "insufficient_quota" in error_msg or "quota" in error_msg.lower():
-            if feedback_type == "no_feedback":
-                return f"OpenAI API quota exceeded. Please add a payment method to your OpenAI account. For now, using mock response: '기억' 수준의 질문을 작성하셨군요.\n다음 단계로 넘어가면 질문을 수정할 기회가 주어집니다. 더 창의적인 질문으로 수정하는 것은 어떨까요?\n\n[실험 조건: 피드백 없음]"
-            else:
-                fallback_type = "관련된" if feedback_type == "related" else "텍스트 기반의"
-                return f"OpenAI API quota exceeded. Please add a payment method to your OpenAI account. For now, using mock response: '기억' 수준의 질문을 작성하셨군요.\n'이 내용을 바탕으로 새로운 아이디어나 해결책을 제안해보세요?'와 같은 질문으로 수정하는 것은 어떨까요?\n\n[실험 조건: {fallback_type} 피드백]"
-        else:
-            return f"Error generating AI feedback: {error_msg}"
+        return handle_api_error(e, feedback_type)
+    
+def get_session_value(key, default=None):
+    """Helper to safely get session state values"""
+    return st.session_state.get(key, default)
+
+def set_session_value(key, value):
+    """Helper to set session state values"""
+    st.session_state[key] = value
+
+def create_widget_key(base_name, iteration=None):
+    """Create consistent widget keys"""
+    if iteration is None:
+        iteration = get_session_value('iteration', 0)
+    return f"{base_name}_{iteration}"
+
+class EventLogger:
+    def __init__(self):
+        self.pending_events = []
+        self.batch_size = 5  # Smaller batch for experiment context
+    
+    def add_event(self, event_description, data=None):
+        """Add event to batch"""
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
+        
+        log_entry = {
+            "timestamp": timestamp,
+            "iteration": get_session_value('iteration', 0),
+            "stage": get_session_value('stage', 'unknown'),
+            "event": event_description
+        }
+        
+        if data:
+            log_entry["data"] = data
+        
+        self.pending_events.append(log_entry)
+        
+        # Flush if batch is full or for critical events
+        if (len(self.pending_events) >= self.batch_size or 
+            "completed" in event_description.lower() or
+            "error" in event_description.lower()):
+            self.flush()
+    
+    def flush(self):
+        """Write all pending events to session state"""
+        if 'event_log' not in st.session_state:
+            st.session_state.event_log = []
+        
+        st.session_state.event_log.extend(self.pending_events)
+        self.pending_events.clear()
+
+# Initialize global logger
+if 'logger' not in st.session_state:
+    st.session_state.logger = EventLogger()
         
 # Initialize session state variables if they don't exist
 def initialize_session_state():
@@ -881,7 +896,7 @@ def submit_novelty_survey():
     st.session_state.current_iteration_data['difficulty_comments'] = difficulty_comments
     
     # Log novelty and difficulty survey data
-    log_event("Novelty and difficulty survey submitted", {
+    log_event_batched("Novelty and difficulty survey submitted", {
         "novelty_rating": novelty_rating,
         "paragraph_comments": paragraph_comments,
         "difficulty_rating": difficulty_rating,
@@ -938,7 +953,7 @@ def submit_question():
     original_paragraph_index = st.session_state.paragraph_mapping.get(st.session_state.iteration, st.session_state.iteration)
     
     # Log the submitted question with paragraph information
-    log_event("Question submitted", {
+    log_event_batched("Question submitted", {
         "question": question,
         "question_comments": question_comments,
         "question_input_interaction_time": question_input_interaction_time,
@@ -1016,7 +1031,7 @@ def submit_survey():
         "original_paragraph_index": original_paragraph_index,
         "feedback_type": feedback_type  # Add feedback type to the log
     }
-    log_event("Survey submitted", survey_data)
+    log_event_batched("Survey submitted", survey_data)
     
     # Go to edit question stage
     send_marker("edit_start")
@@ -1063,6 +1078,9 @@ def submit_edited_question():
     if hasattr(st.session_state, 'edit_textarea_focus_time'):
         edit_textarea_interaction_time = time.time() - st.session_state.edit_textarea_focus_time
     
+    # Get metrics if they exist
+    metrics = st.session_state.current_iteration_data.get('suggested_question_metrics', {})
+    
     # Store all the data for this iteration
     iteration_data = {
         "iteration": st.session_state.iteration,
@@ -1087,6 +1105,13 @@ def submit_edited_question():
         "edit_comments": edit_comments,
         "edit_textarea_interaction_time_seconds": edit_textarea_interaction_time,
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        # Add question metrics to CSV
+        "suggested_question_relatedness_score": metrics.get('relatedness_score'),
+        "suggested_question_paragraph_relevance": metrics.get('paragraph_relevance'),
+        "suggested_question_length": metrics.get('question_length'),
+        "suggested_question_word_count": metrics.get('question_word_count'),
+        "suggested_question_ends_with_question_mark": metrics.get('ends_with_question_mark'),
+        "suggested_question_is_empty": metrics.get('is_empty'),
         **stage_durations  # Add all stage durations
     }
     st.session_state.responses.append(iteration_data)
@@ -1116,6 +1141,8 @@ def submit_edited_question():
             del st.session_state[key]
     
     # Move to next iteration
+    if hasattr(st.session_state, 'logger'):
+        st.session_state.logger.flush()
     st.session_state.iteration += 1
     start_iteration()
 
@@ -1316,6 +1343,8 @@ def main():
         # Handle different stages
         if st.session_state.stage == "completed":
             st.success("Experiment completed! Thank you for your participation.")
+            if hasattr(st.session_state, 'logger'):
+                st.session_state.logger.flush()  # Final flush of all events
             log_files = save_logs()
             if log_files[0]:
                 st.write(f"Event logs saved to: {log_files[0]}")
