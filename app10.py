@@ -50,12 +50,12 @@ else:
 BLOOM_CLASSIFICATION_EXAMPLES = [
     {
         "paragraph": "8세기 후반 바그다드에는 '지혜의 집(Bayt al-Hikma)'이라는 지식 집약 기관이 설립되어, 고대 그리스의 철학과 자연과학 문헌을 아랍어로 번역하는 대규모 작업이 이루어졌다. 이 번역은 단순히 언어를 바꾸는 것이 아니라, 플라톤, 아리스토텔레스, 히포크라테스 등의 사상을 해석하고 보완하며 새로운 학문 체계를 세우는 과정이었다.",
-        "question": "지혜의 집은 언제 설립되었나요?",
+        "question": "지혜의 집은 언제 설립되었을까?",
         "bloom_level": "기억"
     },
     {
         "paragraph": "현대 도시계획에서 녹지 공간의 중요성이 대두되고 있다. 녹지는 대기 정화, 온도 조절, 시민의 정신 건강 향상 등 다양한 기능을 수행한다. 특히 팬데믹 이후 야외 활동 공간에 대한 수요가 급증하면서, 도시 내 공원과 정원의 역할이 재조명받고 있다.",
-        "question": "녹지 공간이 시민들에게 제공하는 주요 혜택들은 무엇인가요?",
+        "question": "녹지 공간이 시민들에게 제공하는 주요 혜택들은 무엇일까?",
         "bloom_level": "이해"
     },
     {
@@ -76,6 +76,11 @@ BLOOM_CLASSIFICATION_EXAMPLES = [
     {
         "paragraph": "기억의 장소(sites of memory)는 공동체의 역사적 경험이나 정체성이 구체적인 지리적 공간에 응축되어 저장된 장소를 의미하며, 예술은 이를 서사적으로 재구성하는 중요한 매체로 작동한다. 특히 역사적 트라우마와 같은 복잡한 주제들을 다루는 예술 작품은 과거의 사건을 현재의 감각과 윤리 속으로 불러오는 적극적인 재구성 작업을 수행한다. 예술적 재현은 공식 기록으로 남지 않은 기억의 공백을 채우고, 소외된 기억들을 복원함으로써 개인의 기억과 집단적 기억 사이의 경계를 흐리게 만든다. 이러한 작업은 관람자가 기억의 참여자이자 해석자로 전환되도록 유도한다. 이처럼 예술은 단순한 표현 수단을 넘어, 기억의 정치성과 윤리성, 사회적 기억의 구성 방식을 비판적으로 탐구하는 도구로 기능한다.",
         "question": "기억의 예술적 재현은 역사적 사실 검증과 어떤 측면에서 긴장 관계를 맺을 수 있을까?",
+        "bloom_level": "창조"
+    },
+    {
+        "paragraph": "코그니타리아트는 후기 자본주의 체제에서 인지, 정동, 창의성을 중심 자산으로 동원당하는 신(新)노동계급을 지칭하는 개념이다. 이들은 비물질적 노동의 수행 주체로서, 디지털 네트워크에 매개된 작업 환경 속에서 자기표현과 성과 창출의 무한한 자기책임성을 강요받는다. ‘자유로운 창조자’라는 표상 이면에는 플랫폼 자본주의가 조장한 노동의 유연화와 생계의 불확실성이 구조적으로 깊게 내재되어 있다. 이로써 코그니타리아트는 근대적 프롤레타리아트와 달리, 신자유주의적 자아 기술을 통해 자기 착취에 스스로를 능동적으로 동원하게 되는 존재로 전락한다. 이 개념은 노동의 본질이 물질에서 정보로 이행함에 따라, 권력과 저항의 지형 또한 근본적으로 재편되고 있음을 날카롭게 시사한다.",
+        "question": "코그니타리아트가 겪는 자기 착취 문제를 줄이기 위한 새로운 노동 구조나 제도는 어떻게 설계할 수 있을까?",
         "bloom_level": "창조"
     }
 ]
@@ -932,8 +937,14 @@ def submit_question():
     question = st.session_state.get('user_question', '')
     question_comments = st.session_state.get('question_comments', '')
     
+    # Enhanced validation
     if not question.strip():
-        st.error("Please enter a question before submitting.")
+        st.error("질문을 입력해주세요.")
+        return
+    
+    # Check if the question is only a question mark (with optional whitespace)
+    if question.strip() == '?':
+        st.error("질문을 입력해주세요.")
         return
     
     # Calculate question input interaction time (from first focus to submission)
